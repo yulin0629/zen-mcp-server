@@ -102,7 +102,7 @@ class ModelProviderRegistry:
         3. OPENROUTER - Catch-all for cloud models via unified API
 
         Args:
-            model_name: Name of the model (e.g., "gemini-2.5-flash-preview-05-20", "o3-mini")
+            model_name: Name of the model (e.g., "gemini-2.5-flash-preview-05-20", "o4-mini")
 
         Returns:
             ModelProvider instance that supports this model
@@ -196,7 +196,7 @@ class ModelProviderRegistry:
         a sensible default model for auto mode fallback situations.
 
         Priority order:
-        1. OpenAI o3-mini (balanced performance/cost) if OpenAI API key available
+        1. OpenAI o4-mini (balanced performance/cost) if OpenAI API key available
         2. Gemini 2.0 Flash (fast and efficient) if Gemini API key available
         3. OpenAI o3 (high performance) if OpenAI API key available
         4. Gemini 2.5 Pro (deep reasoning) if Gemini API key available
@@ -211,7 +211,7 @@ class ModelProviderRegistry:
 
         # Priority order: prefer balanced models first, then high-performance
         if openai_available:
-            return "o3-mini"  # Balanced performance/cost
+            return "o4-mini"  # Balanced performance/cost
         elif gemini_available:
             return "gemini-2.5-flash-preview-05-20"  # Fast and efficient
         else:

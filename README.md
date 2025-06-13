@@ -500,14 +500,14 @@ DEFAULT_MODEL=auto  # Claude picks the best model automatically
 
 # API Keys (at least one required)
 GEMINI_API_KEY=your-gemini-key    # Enables Gemini Pro & Flash
-OPENAI_API_KEY=your-openai-key    # Enables O3, O3-mini
+OPENAI_API_KEY=your-openai-key    # Enables O3, O4-mini
 ```
 
 **Available Models:**
 - **`pro`** (Gemini 2.5 Pro): Extended thinking, deep analysis
 - **`flash`** (Gemini 2.0 Flash): Ultra-fast responses
 - **`o3`**: Strong logical reasoning  
-- **`o3-mini`**: Balanced speed/quality
+- **`o4-mini`**: Balanced speed/quality
 - **Custom models**: via OpenRouter or local APIs (Ollama, vLLM, etc.)
 
 For detailed configuration options, see the [Advanced Usage Guide](docs/advanced-usage.md).
