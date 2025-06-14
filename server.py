@@ -260,7 +260,9 @@ async def handle_list_tools() -> list[Tool]:
                 name="get_version",
                 description=(
                     "VERSION & CONFIGURATION - Get server version, configuration details, "
-                    "and list of available tools. Useful for debugging and understanding capabilities."
+                    "available models from all configured providers (Gemini, OpenAI, OpenRouter), "
+                    "and list of available tools. Use this to discover which AI models you can use "
+                    "in the 'model' parameter for other tools. Useful for debugging and understanding capabilities."
                 ),
                 inputSchema={"type": "object", "properties": {}},
             ),
@@ -570,6 +572,9 @@ async def handle_get_version() -> list[TextContent]:
     # Check configured providers
     from providers import ModelProviderRegistry
     from providers.base import ProviderType
+    
+    # Ensure providers are initialized
+    configure_providers()
 
     configured_providers = []
     if ModelProviderRegistry.get_provider(ProviderType.GOOGLE):
@@ -577,7 +582,47 @@ async def handle_get_version() -> list[TextContent]:
     if ModelProviderRegistry.get_provider(ProviderType.OPENAI):
         configured_providers.append("OpenAI (o3, o3-mini)")
     if ModelProviderRegistry.get_provider(ProviderType.OPENROUTER):
-        configured_providers.append("OpenRouter (configured via conf/custom_models.json)")
+        # Get OpenRouter model details
+        try:
+            from providers.openrouter_registry import OpenRouterModelRegistry
+            registry = OpenRouterModelRegistry()
+            
+            # Check if OPENROUTER_ALLOWED_MODELS is set and get filtered models
+            allowed_models_env = os.getenv("OPENROUTER_ALLOWED_MODELS", "")
+            if allowed_models_env.strip():
+                allowed_models = [m.strip() for m in allowed_models_env.split(",") if m.strip()]
+                openrouter_info = f"OpenRouter ({len(allowed_models)} allowed models)"
+                # Add the specific allowed models as a sub-list
+                for model in allowed_models:
+                    # Try to find alias for this model
+                    config = registry.resolve(model)
+                    if config and config.aliases:
+                        alias_str = ", ".join(config.aliases[:3])  # Show first 3 aliases
+                        configured_providers.append(f"    {model} (aliases: {alias_str})")
+                    else:
+                        configured_providers.append(f"    {model}")
+            else:
+                # No restrictions, show available aliases
+                aliases = registry.list_aliases()
+                if aliases:
+                    alias_count = len(aliases)
+                    openrouter_info = f"OpenRouter ({alias_count} available aliases)"
+                    # Group aliases by model type for better readability
+                    sample_aliases = sorted(aliases)[:10]  # Show first 10 as samples
+                    if sample_aliases:
+                        configured_providers.append(f"    Available aliases: {', '.join(sample_aliases)}")
+                        if alias_count > 10:
+                            configured_providers.append(f"    ... and {alias_count - 10} more")
+                else:
+                    openrouter_info = "OpenRouter (no models configured)"
+            
+            # Insert the main OpenRouter line before the sub-items
+            if 'openrouter_info' in locals():
+                configured_providers.insert(-len([p for p in configured_providers if p.startswith("    ")]), openrouter_info)
+        except Exception as e:
+            # Fallback to original message if anything fails
+            logging.warning(f"Failed to get OpenRouter model details: {e}")
+            configured_providers.append("OpenRouter (configured via conf/custom_models.json)")
 
     # Format the information in a human-readable way
     text = f"""Zen MCP Server v{__version__}
