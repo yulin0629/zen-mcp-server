@@ -1,11 +1,10 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: zen-mcp-redis
     restart: unless-stopped
     stop_grace_period: 3s
     ports:
-      - "6379:6379"
+      - "6379"  # 使用隨機埠號避免衝突
     volumes:
       - redis_data:/data
     command: redis-server --save 60 1 --loglevel warning --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -19,7 +18,6 @@ services:
   zen-mcp:
     build: .
     image: zen-mcp-server:latest
-    container_name: zen-mcp-server
     restart: unless-stopped
     stop_grace_period: 5s
     depends_on:
@@ -64,7 +62,6 @@ services:
   log-monitor:
     build: .
     image: zen-mcp-server:latest
-    container_name: zen-mcp-log-monitor
     restart: unless-stopped
     stop_grace_period: 3s
     depends_on:

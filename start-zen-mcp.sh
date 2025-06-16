@@ -28,12 +28,16 @@ write_color_output() {
 # 啟動 WSL 實例
 start_wsl_instance() {
     write_color_output "$YELLOW" "🚀 啟動 WSL 實例 (使用 .env.wsl)..."
-    docker compose -f docker-compose.multi.yml --env-file .env.wsl -p zen-wsl up -d
+    # 使用單一檔案 + project name 方式
+    docker compose --env-file .env.wsl -p zen-wsl up -d
     if [ $? -eq 0 ]; then
         write_color_output "$GREEN" "✅ WSL 實例啟動成功！"
         echo "   Redis 容器: zen-wsl-redis-1"
         echo "   MCP 容器: zen-wsl-zen-mcp-1"
-        echo "   配置檔案: .env.wsl"
+        echo "   Log Monitor 容器: zen-wsl-log-monitor-1"
+        echo "   配置檔案: docker-compose.yml"
+        echo "   環境檔案: .env.wsl"
+        echo "   Project Name: zen-wsl"
     else
         write_color_output "$RED" "❌ WSL 實例啟動失敗！"
     fi
@@ -42,10 +46,6 @@ start_wsl_instance() {
 # 停止 WSL 實例
 stop_wsl_instance() {
     write_color_output "$YELLOW" "🛑 停止 WSL 實例..."
-    
-    write_color_output "$GRAY" "   檢查並停止預設實例..."
-    docker stop zen-mcp-server zen-mcp-redis zen-mcp-log-monitor 2>/dev/null
-    docker rm zen-mcp-server zen-mcp-redis zen-mcp-log-monitor 2>/dev/null
     
     docker compose -p zen-wsl down
     write_color_output "$GREEN" "✅ WSL 實例已停止"
@@ -94,6 +94,19 @@ restart_zen_mcp_container() {
     fi
 }
 
+# 重建 Docker Images
+build_images() {
+    write_color_output "$YELLOW" "🔨 重建 Docker Images (無快取)..."
+    docker compose --env-file .env.wsl -p zen-wsl build --no-cache
+    if [ $? -eq 0 ]; then
+        write_color_output "$GREEN" "✅ Docker Images 重建成功！"
+        echo ""
+        write_color_output "$CYAN" "💡 提示: 重建完成後，您可能需要重新啟動實例來使用新的映像檔"
+    else
+        write_color_output "$RED" "❌ Docker Images 重建失敗！"
+    fi
+}
+
 # 顯示互動式選單
 show_menu() {
     while true; do
@@ -111,7 +124,8 @@ show_menu() {
         write_color_output "$MAGENTA" "  [4] 實時追蹤日誌"
         write_color_output "$YELLOW" "  [5] 重啟 WSL 實例"
         write_color_output "$YELLOW" "  [6] 重啟 zen-mcp 容器"
-        write_color_output "$RED" "  [7] 停止 WSL 實例"
+        echo -e "${YELLOW}  [7] 重建 Docker Images${NC}"
+        write_color_output "$RED" "  [8] 停止 WSL 實例"
         echo ""
         write_color_output "$GRAY" "  [Q] 退出"
         echo ""
@@ -150,6 +164,10 @@ show_menu() {
                 echo ""; read -r -p "按 Enter 繼續..."
                 ;;
             7)
+                build_images
+                echo ""; read -r -p "按 Enter 繼續..."
+                ;;
+            8)
                 stop_wsl_instance
                 echo ""; read -r -p "按 Enter 繼續..."
                 ;;
@@ -185,7 +203,7 @@ done
 set -- "${POSITIONAL_ARGS[@]}" # 恢復位置參數
 
 # 處理位置參數 (操作指令)
-VALID_ACTIONS=("menu" "wsl" "stop" "restart" "restart-zen" "status" "logs")
+VALID_ACTIONS=("menu" "wsl" "stop" "restart" "restart-zen" "status" "logs" "build")
 if [ -n "$1" ]; then
     is_valid_action=false
     for valid_action in "${VALID_ACTIONS[@]}"; do
@@ -232,6 +250,9 @@ case "$ACTION" in
     logs)
         show_logs # FOLLOW_LOGS 已在參數解析時設定
         ;;
+    build)
+        build_images
+        ;;
     *)
         # 理論上不應到達此處，因為參數解析已處理無效操作
         write_color_output "$RED" "內部錯誤：未知的操作 '$ACTION'"
@@ -252,6 +273,7 @@ if [ "$ACTION" != "menu" ] && [ $? -eq 0 ]; then
         echo "   - 查看狀態:   $0 status"
         echo "   - 查看日誌:   $0 logs"
         echo "   - 實時日誌:   $0 logs --follow  (或 -f, -Follow)"
+        echo "   - 重建映像:   $0 build"
         echo "   - 停止實例:   $0 stop"
         echo ""
     fi

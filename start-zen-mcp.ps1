@@ -3,7 +3,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet("windows", "stop", "restart", "status", "logs", "menu")]
+    [ValidateSet("windows", "stop", "restart", "status", "logs", "build", "menu")]
     [string]$Action = "menu",
     
     [Parameter()]
@@ -23,12 +23,16 @@ function Write-ColorOutput($ForegroundColor) {
 # 啟動 Windows 實例
 function Start-WindowsInstance {
     Write-ColorOutput Yellow "🚀 啟動 Windows 實例 (使用 .env.windows)..."
-    docker compose -f docker-compose.multi.yml --env-file .env.windows -p zen-windows up -d
+    # 使用單一檔案 + project name 方式
+    docker compose --env-file .env.windows -p zen-windows up -d
     if ($LASTEXITCODE -eq 0) {
         Write-ColorOutput Green "✅ Windows 實例啟動成功！"
         Write-Host "   Redis 容器: zen-windows-redis-1"
         Write-Host "   MCP 容器: zen-windows-zen-mcp-1"
-        Write-Host "   配置檔案: .env.windows"
+        Write-Host "   Log Monitor 容器: zen-windows-log-monitor-1"
+        Write-Host "   配置檔案: docker-compose.yml"
+        Write-Host "   環境檔案: .env.windows"
+        Write-Host "   Project Name: zen-windows"
     } else {
         Write-ColorOutput Red "❌ Windows 實例啟動失敗！"
     }
@@ -37,11 +41,6 @@ function Start-WindowsInstance {
 # 停止所有實例
 function Stop-AllInstances {
     Write-ColorOutput Yellow "🛑 停止所有實例..."
-    
-    # 先停止現有的預設實例（如果存在）
-    Write-Host "   檢查並停止預設實例..."
-    docker stop zen-mcp-server zen-mcp-redis zen-mcp-log-monitor 2>$null
-    docker rm zen-mcp-server zen-mcp-redis zen-mcp-log-monitor 2>$null
     
     # 停止專案實例
     docker compose -p zen-windows down
@@ -79,6 +78,19 @@ function Restart-Instances {
     Start-WindowsInstance
 }
 
+# 重建 Docker Images
+function Build-Images {
+    Write-ColorOutput Yellow "🔨 重建 Docker Images (無快取)..."
+    docker compose --env-file .env.windows -p zen-windows build --no-cache
+    if ($LASTEXITCODE -eq 0) {
+        Write-ColorOutput Green "✅ Docker Images 重建成功！"
+        Write-Host ""
+        Write-ColorOutput Cyan "💡 提示: 重建完成後，您可能需要重新啟動實例來使用新的映像檔"
+    } else {
+        Write-ColorOutput Red "❌ Docker Images 重建失敗！"
+    }
+}
+
 # 顯示互動式選單
 function Show-Menu {
     while ($true) {
@@ -95,7 +107,8 @@ function Show-Menu {
         Write-ColorOutput Magenta "  [3] 查看日誌"
         Write-ColorOutput Magenta "  [4] 實時追蹤日誌"
         Write-ColorOutput Yellow "  [5] 重啟實例"
-        Write-ColorOutput Red "  [6] 停止實例"
+        Write-ColorOutput DarkYellow "  [6] 重建 Docker Images"
+        Write-ColorOutput Red "  [7] 停止實例"
         Write-Host ""
         Write-ColorOutput Gray "  [Q] 退出"
         Write-Host ""
@@ -130,6 +143,11 @@ function Show-Menu {
                 Read-Host "按 Enter 繼續..."
             }
             "6" {
+                Build-Images
+                Write-Host ""
+                Read-Host "按 Enter 繼續..."
+            }
+            "7" {
                 Stop-AllInstances
                 Write-Host ""
                 Read-Host "按 Enter 繼續..."
@@ -183,6 +201,12 @@ switch ($Action) {
         Write-Host ""
         Show-Logs
     }
+    "build" {
+        Write-Host ""
+        Write-ColorOutput Cyan "🤖 Zen MCP Server 管理工具"
+        Write-Host ""
+        Build-Images
+    }
 }
 
 # 如果不是選單模式，顯示提示
@@ -190,10 +214,12 @@ if ($Action -ne "menu") {
     Write-Host ""
     Write-Host "💡 提示："
     Write-Host "   - 互動式選單: .\start-zen-mcp.ps1"
+    Write-Host "   - 啟動實例: .\start-zen-mcp.ps1 windows"
     Write-Host "   - 重啟實例: .\start-zen-mcp.ps1 restart"
     Write-Host "   - 查看狀態: .\start-zen-mcp.ps1 status"
     Write-Host "   - 查看日誌: .\start-zen-mcp.ps1 logs"
     Write-Host "   - 實時日誌: .\start-zen-mcp.ps1 logs -Follow"
+    Write-Host "   - 重建映像: .\start-zen-mcp.ps1 build"
     Write-Host "   - 停止實例: .\start-zen-mcp.ps1 stop"
     Write-Host ""
 }
