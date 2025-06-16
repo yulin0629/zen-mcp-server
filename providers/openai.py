@@ -1,10 +1,12 @@
 """OpenAI model provider implementation."""
 
 import logging
+from typing import Optional
 
 from .base import (
     FixedTemperatureConstraint,
     ModelCapabilities,
+    ModelResponse,
     ProviderType,
     RangeTemperatureConstraint,
 )
@@ -23,6 +25,10 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             "supports_extended_thinking": False,
         },
         "o3-mini": {
+            "context_window": 200_000,  # 200K tokens
+            "supports_extended_thinking": False,
+        },
+        "o3-pro": {
             "context_window": 200_000,  # 200K tokens
             "supports_extended_thinking": False,
         },
@@ -66,7 +72,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
         config = self.SUPPORTED_MODELS[resolved_name]
 
         # Define temperature constraints per model
-        if resolved_name in ["o3", "o3-mini", "o4-mini", "o4-mini-high"]:
+        if resolved_name in ["o3", "o3-mini", "o3-pro", "o4-mini", "o4-mini-high"]:
             # O3 and O4 reasoning models only support temperature=1.0
             temp_constraint = FixedTemperatureConstraint(1.0)
         else:
@@ -106,6 +112,29 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             return False
 
         return True
+
+    def generate_content(
+        self,
+        prompt: str,
+        model_name: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        """Generate content using OpenAI API with proper model name resolution."""
+        # Resolve model alias before making API call
+        resolved_model_name = self._resolve_model_name(model_name)
+
+        # Call parent implementation with resolved model name
+        return super().generate_content(
+            prompt=prompt,
+            model_name=resolved_model_name,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            **kwargs,
+        )
 
     def supports_thinking_mode(self, model_name: str) -> bool:
         """Check if the model supports extended thinking mode."""

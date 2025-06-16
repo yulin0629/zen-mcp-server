@@ -8,6 +8,7 @@ This project includes comprehensive test coverage through unit tests and integra
 - Python virtual environment activated: `source venv/bin/activate`
 - All dependencies installed: `pip install -r requirements.txt`
 - Docker containers running (for simulator tests): `./run-server.sh`
+  - Use `./run-server.sh -f` to automatically follow logs after starting
 
 ### Unit Tests
 
@@ -29,6 +30,32 @@ Simulator tests replicate real-world Claude CLI interactions with the MCP server
 - Log output validation
 
 **Important**: Simulator tests require `LOG_LEVEL=DEBUG` in your `.env` file to validate detailed execution logs.
+
+#### Monitoring Logs During Tests
+
+**Important**: The MCP stdio protocol interferes with stderr output during tool execution. While server startup logs appear in `docker compose logs`, tool execution logs are only written to file-based logs inside the container. This is a known limitation of the stdio-based MCP protocol and cannot be fixed without changing the MCP implementation.
+
+To monitor logs during test execution:
+
+```bash
+# Start server and automatically follow logs
+./run-server.sh -f
+
+# Or manually monitor main server logs (includes all tool execution details)
+docker exec zen-mcp-server tail -f -n 500 /tmp/mcp_server.log
+
+# Monitor MCP activity logs (tool calls and completions)  
+docker exec zen-mcp-server tail -f /tmp/mcp_activity.log
+
+# Check log file sizes (logs rotate at 20MB)
+docker exec zen-mcp-server ls -lh /tmp/mcp_*.log*
+```
+
+**Log Rotation**: All log files are configured with automatic rotation at 20MB to prevent disk space issues. The server keeps:
+- 10 rotated files for mcp_server.log (200MB total)
+- 5 rotated files for mcp_activity.log (100MB total)
+
+**Why logs don't appear in docker compose logs**: The MCP stdio_server captures stderr during tool execution to prevent interference with the JSON-RPC protocol communication. This means that while you'll see startup logs in `docker compose logs`, you won't see tool execution logs there.
 
 #### Running All Simulator Tests
 ```bash
@@ -101,26 +128,24 @@ Validate real-world usage scenarios by simulating actual Claude prompts:
 - **Token allocation**: Context window management in practice
 - **Redis validation**: Conversation persistence and retrieval
 
-## Contributing: Test Requirements
+## Contributing
 
-When contributing to this project:
+For detailed contribution guidelines, testing requirements, and code quality standards, please see our [Contributing Guide](./contributions.md).
 
-1. **New features MUST include tests**:
-   - Add unit tests in `tests/` for new functions or classes
-   - Test both success and error cases
-   
-2. **Tool changes require simulator tests**:
-   - Add simulator tests in `simulator_tests/` for new or modified tools
-   - Use realistic prompts that demonstrate the feature
-   - Validate output through Docker logs
-   
-3. **Test naming conventions**:
-   - Unit tests: `test_<feature>_<scenario>.py`
-   - Simulator tests: `test_<tool>_<behavior>.py`
+### Quick Testing Reference
 
-4. **Before submitting PR**:
-   - Run all unit tests: `python -m pytest -xvs`
-   - Run relevant simulator tests
-   - Ensure all linting passes
+```bash
+# Activate virtual environment
+source venv/bin/activate
 
-Remember: Tests are documentation. They show how features are intended to be used and help prevent regressions.
+# Run linting checks
+ruff check . && black --check . && isort --check-only .
+
+# Run unit tests
+python -m pytest -xvs
+
+# Run simulator tests (for tool changes)
+python communication_simulator_test.py
+```
+
+Remember: All tests must pass before submitting a PR. See the [Contributing Guide](./contributions.md) for complete requirements.

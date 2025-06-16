@@ -266,7 +266,7 @@ class TestCustomProviderOpenRouterRestrictions:
 
     @patch.dict(os.environ, {"OPENROUTER_ALLOWED_MODELS": "opus,sonnet", "OPENROUTER_API_KEY": "test-key"})
     def test_custom_provider_respects_openrouter_restrictions(self):
-        """Test that custom provider respects OpenRouter restrictions for cloud models."""
+        """Test that custom provider correctly defers OpenRouter models to OpenRouter provider."""
         # Clear any cached restriction service
         import utils.model_restrictions
 
@@ -276,11 +276,9 @@ class TestCustomProviderOpenRouterRestrictions:
 
         provider = CustomProvider(base_url="http://test.com/v1")
 
-        # Should validate allowed OpenRouter models (is_custom=false)
-        assert provider.validate_model_name("opus")
-        assert provider.validate_model_name("sonnet")
-
-        # Should not validate disallowed OpenRouter models
+        # CustomProvider should NOT validate OpenRouter models - they should be deferred to OpenRouter
+        assert not provider.validate_model_name("opus")
+        assert not provider.validate_model_name("sonnet")
         assert not provider.validate_model_name("haiku")
 
         # Should still validate custom models (is_custom=true) regardless of restrictions
@@ -288,7 +286,7 @@ class TestCustomProviderOpenRouterRestrictions:
 
     @patch.dict(os.environ, {"OPENROUTER_ALLOWED_MODELS": "opus", "OPENROUTER_API_KEY": "test-key"})
     def test_custom_provider_openrouter_capabilities_restrictions(self):
-        """Test that custom provider's get_capabilities respects OpenRouter restrictions."""
+        """Test that custom provider's get_capabilities correctly handles OpenRouter models."""
         # Clear any cached restriction service
         import utils.model_restrictions
 
@@ -298,7 +296,8 @@ class TestCustomProviderOpenRouterRestrictions:
 
         provider = CustomProvider(base_url="http://test.com/v1")
 
-        # Should work for allowed OpenRouter model
+        # For OpenRouter models, get_capabilities should still work but mark them as OPENROUTER
+        # This tests the capabilities lookup, not validation
         capabilities = provider.get_capabilities("opus")
         assert capabilities.provider == ProviderType.OPENROUTER
 
@@ -335,7 +334,7 @@ class TestCustomProviderOpenRouterRestrictions:
 
     @patch.dict(os.environ, {"OPENROUTER_ALLOWED_MODELS": "", "OPENROUTER_API_KEY": "test-key"})
     def test_custom_provider_empty_restrictions_allows_all_openrouter(self):
-        """Test that empty OPENROUTER_ALLOWED_MODELS allows all OpenRouter models."""
+        """Test that custom provider correctly defers OpenRouter models regardless of restrictions."""
         # Clear any cached restriction service
         import utils.model_restrictions
 
@@ -345,10 +344,10 @@ class TestCustomProviderOpenRouterRestrictions:
 
         provider = CustomProvider(base_url="http://test.com/v1")
 
-        # Should validate all OpenRouter models when restrictions are empty
-        assert provider.validate_model_name("opus")
-        assert provider.validate_model_name("sonnet")
-        assert provider.validate_model_name("haiku")
+        # CustomProvider should NOT validate OpenRouter models - they should be deferred to OpenRouter
+        assert not provider.validate_model_name("opus")
+        assert not provider.validate_model_name("sonnet")
+        assert not provider.validate_model_name("haiku")
 
 
 class TestRegistryIntegration:
@@ -536,18 +535,38 @@ class TestAutoModeWithRestrictions:
     @patch.dict(os.environ, {"OPENAI_ALLOWED_MODELS": "mini", "GEMINI_API_KEY": "", "OPENAI_API_KEY": "test-key"})
     def test_fallback_with_shorthand_restrictions(self):
         """Test fallback model selection with shorthand restrictions."""
-        # Clear caches
+        # Clear caches and reset registry
         import utils.model_restrictions
         from providers.registry import ModelProviderRegistry
         from tools.models import ToolModelCategory
 
         utils.model_restrictions._restriction_service = None
-        ModelProviderRegistry.clear_cache()
 
-        # Even with "mini" restriction, fallback should work if provider handles it correctly
-        # This tests the real-world scenario
-        model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.FAST_RESPONSE)
+        # Store original providers for restoration
+        registry = ModelProviderRegistry()
+        original_providers = registry._providers.copy()
+        original_initialized = registry._initialized_providers.copy()
 
-        # The fallback will depend on how get_available_models handles aliases
-        # For now, we accept either behavior and document it
-        assert model in ["o4-mini", "gemini-2.5-flash-preview-05-20"]
+        try:
+            # Clear registry and register only OpenAI and Gemini providers
+            ModelProviderRegistry._instance = None
+            from providers.gemini import GeminiModelProvider
+            from providers.openai import OpenAIModelProvider
+
+            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
+            ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
+
+            # Even with "mini" restriction, fallback should work if provider handles it correctly
+            # This tests the real-world scenario
+            model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.FAST_RESPONSE)
+
+            # The fallback will depend on how get_available_models handles aliases
+            # For now, we accept either behavior and document it
+            assert model in ["o4-mini", "gemini-2.5-flash-preview-05-20"]
+        finally:
+            # Restore original registry state
+            registry = ModelProviderRegistry()
+            registry._providers.clear()
+            registry._initialized_providers.clear()
+            registry._providers.update(original_providers)
+            registry._initialized_providers.update(original_initialized)

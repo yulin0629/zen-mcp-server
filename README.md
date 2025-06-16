@@ -3,7 +3,7 @@
 https://github.com/user-attachments/assets/8097e18e-b926-4d8b-ba14-a979e4c58bda
 
 <div align="center">  
-  <b>🤖 Claude + [Gemini / O3 / OpenRouter / Ollama / Any Model] = Your Ultimate AI Development Team</b>
+  <b>🤖 Claude + [Gemini / O3 / GROK / OpenRouter / Ollama / Any Model] = Your Ultimate AI Development Team</b>
 </div>
 
 <br/>
@@ -13,7 +13,10 @@ problem-solving, and collaborative development.
 
 **Features true AI orchestration with conversations that continue across tasks** - Give Claude a complex
 task and let it orchestrate between models automatically. Claude stays in control, performs the actual work, 
-but gets perspectives from the best AI for each subtask. Claude can switch between different tools _and_ models mid-conversation, 
+but gets perspectives from the best AI for each subtask. With tools like [`analyze`](#6-analyze---smart-file-analysis) for 
+understanding codebases, [`codereview`](#3-codereview---professional-code-review) for audits, [`refactor`](#7-refactor---intelligent-code-refactoring) for 
+improving code structure, [`debug`](#5-debug---expert-debugging-assistant) for solving complex problems, and [`precommit`](#4-precommit---pre-commit-validation) for 
+validating changes, Claude can switch between different tools _and_ models mid-conversation, 
 with context carrying forward seamlessly.
 
 **Example Workflow - Claude Code:**
@@ -27,7 +30,13 @@ with context carrying forward seamlessly.
 All within a single conversation thread! Gemini Pro in step 6 _knows_ what was recommended by O3 in step 3! Taking that context
 and review into consideration to aid with its pre-commit review.
 
-**Think of it as Claude Code _for_ Claude Code.** This MCP isn't magic. It's just **super-glue**. 
+**Think of it as Claude Code _for_ Claude Code.** This MCP isn't magic. It's just **super-glue**.
+
+> **Remember:** Claude stays in full control — but **YOU** call the shots. 
+> Zen is designed to have Claude engage other models only when needed — and to follow through with meaningful back-and-forth. 
+> **You're** the one who crafts the powerful prompt that makes Claude bring in Gemini, Flash, O3 — or fly solo.  
+> You're the guide. The prompter. The puppeteer. 
+> ### You are the AI - **Actually Intelligent**.
 
 ## Quick Navigation
 
@@ -43,6 +52,9 @@ and review into consideration to aid with its pre-commit review.
   - [`precommit`](#4-precommit---pre-commit-validation) - Pre-commit validation
   - [`debug`](#5-debug---expert-debugging-assistant) - Debugging help
   - [`analyze`](#6-analyze---smart-file-analysis) - File analysis
+  - [`refactor`](#7-refactor---intelligent-code-refactoring) - Code refactoring with decomposition focus
+  - [`testgen`](#8-testgen---comprehensive-test-generation) - Test generation with edge cases
+  - [`your custom tool`](#add-your-own-tools) - Create custom tools for specialized workflows
 
 - **Advanced Usage**
   - [Advanced Features](#advanced-features) - AI-to-AI conversations, large prompts, web search
@@ -103,6 +115,7 @@ The final implementation resulted in a 26% improvement in JSON parsing performan
 **Option B: Native APIs**
 - **Gemini**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) and generate an API key. For best results with Gemini 2.5 Pro, use a paid API key as the free tier has limited access to the latest models.
 - **OpenAI**: Visit [OpenAI Platform](https://platform.openai.com/api-keys) to get an API key for O3 model access.
+- **X.AI**: Visit [X.AI Console](https://console.x.ai/) to get an API key for GROK model access.
 
 **Option C: Custom API Endpoints (Local models like Ollama, vLLM)**
 [Please see the setup guide](docs/custom_models.md#option-2-custom-api-setup-ollama-vllm-etc). With a custom API you can use:
@@ -239,10 +252,6 @@ Just ask Claude naturally:
 - "Use local-llama to localize and add missing translations to this project" → Uses local Llama 3.2 via custom URL
 - "First use local-llama for a quick local analysis, then use opus for a thorough security review" → Uses both providers in sequence
 
-> **Remember:** Claude remains in control — but **you** are the true orchestrator.  
-> You're the prompter, the guide, the puppeteer.  
-> Your prompt decides when Claude brings in Gemini, Flash, O3 — or handles it solo.
-
 ## Available Tools
 
 **Quick Tool Selection Guide:**
@@ -252,7 +261,9 @@ Just ask Claude naturally:
 - **Pre-commit validation?** → `precommit` (validate git changes before committing)
 - **Something's broken?** → `debug` (root cause analysis, error tracing)
 - **Want to understand code?** → `analyze` (architecture, patterns, dependencies)
-- **Server info?** → `get_version` (version and configuration details)
+- **Need comprehensive tests?** → `testgen` (generates test suites with edge cases)
+- **Code needs refactoring?** → `refactor` (intelligent refactoring with decomposition focus)
+- **Server info?** → `version` (version and configuration details)
 
 **Auto Mode:** When `DEFAULT_MODEL=auto`, Claude automatically picks the best model for each task. You can override with: "Use flash for quick analysis" or "Use o3 to debug this".
 
@@ -272,7 +283,9 @@ Just ask Claude naturally:
 4. [`precommit`](#4-precommit---pre-commit-validation) - Validate git changes before committing
 5. [`debug`](#5-debug---expert-debugging-assistant) - Root cause analysis and debugging
 6. [`analyze`](#6-analyze---smart-file-analysis) - General-purpose file and code analysis
-7. [`get_version`](#7-get_version---server-information) - Get server version and configuration
+7. [`refactor`](#7-refactor---intelligent-code-refactoring) - Code refactoring with decomposition focus
+8. [`testgen`](#8-testgen---comprehensive-test-generation) - Comprehensive test generation with edge case coverage
+9. [`version`](#9-version---server-information) - Get server version and configuration
 
 ### 1. `chat` - General Development Chat & Collaborative Thinking
 **Your thinking partner - bounce ideas, get second opinions, brainstorm collaboratively**
@@ -327,6 +340,11 @@ with the best architecture for my project
 
 **Thinking Mode:** Default is `medium` (8,192 tokens). Use `high` for security-critical code (worth the extra tokens) or `low` for quick style checks (saves ~6k tokens).
 
+**Model Recommendation:** This tool particularly benefits from Gemini Pro or Flash models due to their 1M context window, 
+which allows comprehensive analysis of large codebases. Claude's context limitations make it challenging to see the
+"big picture" in complex projects - this is a concrete example where utilizing a secondary model with larger context 
+provides significant value beyond just experimenting with different AI capabilities.
+
 #### Example Prompts:
 
 ```
@@ -344,6 +362,12 @@ I need an actionable plan but break it down into smaller quick-wins that we can 
 **Comprehensive review of staged/unstaged git changes across multiple repositories**
 
 **Thinking Mode:** Default is `medium` (8,192 tokens). Use `high` or `max` for critical releases when thorough validation justifies the token cost.
+
+**Model Recommendation:** Pre-commit validation benefits significantly from models with
+extended context windows like Gemini Pro, which can analyze extensive changesets across 
+multiple files and repositories simultaneously. This comprehensive view enables detection of
+cross-file dependencies, architectural inconsistencies, and integration issues that might be
+missed when reviewing changes in isolation due to context constraints.
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/584adfa6-d252-49b4-b5b0-0cd6e97fb2c6" width="950">
@@ -419,14 +443,116 @@ Use zen and perform a thorough precommit ensuring there aren't any new regressio
 - Uses file paths (not content) for clean terminal output
 - Can identify patterns, anti-patterns, and refactoring opportunities
 - **Web search capability**: When enabled with `use_websearch` (default: true), the model can request Claude to perform web searches and share results back to enhance analysis with current documentation, design patterns, and best practices
-### 7. `get_version` - Server Information
+
+### 7. `refactor` - Intelligent Code Refactoring
+**Comprehensive refactoring analysis with top-down decomposition strategy**
+
+**Thinking Mode:** Default is `medium` (8,192 tokens). Use `high` for complex legacy systems (worth the investment for thorough refactoring plans) or `max` for extremely complex codebases requiring deep analysis.
+
+**Model Recommendation:** The refactor tool excels with models that have large context windows like Gemini
+Pro (1M tokens), which can analyze entire files and complex codebases simultaneously. 
+This comprehensive view enables detection of cross-file dependencies, architectural patterns, 
+and refactoring opportunities that might be missed when reviewing code in smaller chunks due to context
+constraints.
+
+#### Example Prompts:
+
+```
+"Use gemini pro to decompose my_crazy_big_class.m into smaller extensions"
+"Using zen's refactor decompose the all_in_one_sync_code.swift into maintainable extensions"
+```
+
+💡Example of a **powerful prompt** to get the best out of both Claude + Flash's 1M Context: 
+```
+"First, think about how the authentication module works, find related classes and find
+ any code smells, then using zen's refactor ask flash to confirm your findings but ask 
+ it to find additional code smells and any other quick-wins and then fix these issues"
+```
+
+This results in Claude first performing its own expert analysis, encouraging it to think critically
+and identify links within the project code. It then prompts `flash` to review the same code with a
+hint—preventing it from duplicating Claude's findings and encouraging it to explore other areas that Claude
+did *not* discover.
+
+**Key Features:**
+- **Intelligent prioritization** - Will refuse to work on low priority issues if code is unwieldy large and requires decomposition first, helps identify poorly managed classes and files that need structural improvements before detail work
+- **Top-down decomposition strategy** - Analyzes file → class → function levels systematically
+- **Four refactor types**: `codesmells` (detect anti-patterns), `decompose` (break down large components), `modernize` (update language features), `organization` (improve structure)
+- **Precise line-number references** - Provides exact line numbers for Claude to implement changes
+- **Language-specific guidance** - Tailored suggestions for Python, JavaScript, Java, C#, Swift, and more
+- **Style guide integration** - Uses existing project files as pattern references
+- **Conservative approach** - Careful dependency analysis to prevent breaking changes
+- **Multi-file analysis** - Understands cross-file relationships and dependencies
+- **Priority sequencing** - Recommends implementation order for refactoring changes
+
+**Refactor Types (Progressive Priority System):**
+
+**1. `decompose` (CRITICAL PRIORITY)** - Context-aware decomposition with adaptive thresholds:
+- **AUTOMATIC decomposition** (CRITICAL severity - blocks all other refactoring):
+  - Files >15,000 LOC, Classes >3,000 LOC, Functions >500 LOC
+- **EVALUATE decomposition** (contextual severity - intelligent assessment):
+  - Files >5,000 LOC, Classes >1,000 LOC, Functions >150 LOC
+  - Only recommends if genuinely improves maintainability
+  - Respects legacy stability, domain complexity, performance constraints
+  - Considers legitimate cases where size is justified (algorithms, state machines, generated code)
+
+**2. `codesmells`** - Applied only after decomposition is complete:
+- Detect long methods, complex conditionals, duplicate code, magic numbers, poor naming
+
+**3. `modernize`** - Applied only after decomposition is complete:
+- Update to modern language features (f-strings, async/await, etc.)
+
+**4. `organization`** - Applied only after decomposition is complete:
+- Improve logical grouping, separation of concerns, module structure
+
+**Progressive Analysis:** The tool performs a top-down check (worse → bad → better) and refuses to work on lower-priority issues if critical decomposition is needed first. It understands that massive files and classes create cognitive overload that must be addressed before detail work can be effective. Legacy code that cannot be safely decomposed is handled with higher tolerance thresholds and context-sensitive exemptions.
+
+### 8. `testgen` - Comprehensive Test Generation
+**Generates thorough test suites with edge case coverage** based on existing code and test framework used.
+
+**Thinking Mode (Extended thinking models):** Default is `medium` (8,192 tokens). Use `high` for complex systems with many interactions or `max` for critical systems requiring exhaustive test coverage.
+
+**Model Recommendation:** Test generation excels with extended reasoning models like Gemini Pro or O3, 
+which can analyze complex code paths, understand intricate dependencies, and identify comprehensive edge
+cases. The combination of large context windows and advanced reasoning enables generation of thorough test
+suites that cover realistic failure scenarios and integration points that shorter-context models might overlook.
+
+#### Example Prompts:
+
+**Basic Usage:**
+```
+"Use zen to generate tests for User.login() method"
+"Generate comprehensive tests for the sorting method in src/new_sort.py using o3"
+"Create tests for edge cases not already covered in our tests using gemini pro"
+```
+
+**Key Features:**
+- Multi-agent workflow analyzing code paths and identifying realistic failure modes
+- Generates framework-specific tests following project conventions
+- Supports test pattern following when examples are provided
+- Dynamic token allocation (25% for test examples, 75% for main code)
+- Prioritizes smallest test files for pattern detection
+- Can reference existing test files: `"Generate tests following patterns from tests/unit/"`
+- Specific code coverage - target specific functions/classes rather than testing everything
+
+### 9. `version` - Server Information
 ```
 "Get zen to show its version"
 ```
 
 For detailed tool parameters and configuration options, see the [Advanced Usage Guide](docs/advanced-usage.md).
 
+### Add Your Own Tools
 
+**Want to create custom tools for your specific workflows?** 
+
+The Zen MCP Server is designed to be extensible - you can easily add your own specialized
+tools for domain-specific tasks, custom analysis workflows, or integration with your favorite 
+services.
+
+**[See Complete Tool Development Guide](docs/adding_tools.md)** - Step-by-step instructions for creating, testing, and integrating new tools
+
+Your custom tools get the same benefits as built-in tools: multi-model support, conversation threading, token management, and automatic model selection.
 
 ## Advanced Features
 
@@ -468,7 +594,7 @@ This server enables **true AI collaboration** between Claude and multiple AI mod
 - **Asynchronous workflow**: Conversations don't need to be sequential - Claude can work on tasks between exchanges, then return to Gemini with additional context and progress updates
 - **Incremental updates**: Share only new information in each exchange while maintaining full conversation history
 - **Automatic 25K limit bypass**: Each exchange sends only incremental context, allowing unlimited total conversation size
-- Up to 5 exchanges per conversation with 1-hour expiry
+- Up to 10 exchanges per conversation (configurable via `MAX_CONVERSATION_TURNS`) with 3-hour expiry (configurable via `CONVERSATION_TIMEOUT_HOURS`)
 - Thread-safe with Redis persistence across all tools
 
 **Cross-tool & Cross-Model Continuation Example:**
@@ -537,7 +663,14 @@ For detailed configuration options, see the [Advanced Usage Guide](docs/advanced
 
 ## Testing
 
-For information on running tests and contributing, see the [Testing Guide](docs/testing.md).
+For information on running tests, see the [Testing Guide](docs/testing.md).
+
+## Contributing
+
+We welcome contributions! Please see our comprehensive guides:
+- [Contributing Guide](docs/contributions.md) - Code standards, PR process, and requirements
+- [Adding a New Provider](docs/adding_providers.md) - Step-by-step guide for adding AI providers
+- [Adding a New Tool](docs/adding_tools.md) - Step-by-step guide for creating new tools
 
 ## License
 

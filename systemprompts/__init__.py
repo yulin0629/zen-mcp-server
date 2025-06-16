@@ -7,6 +7,8 @@ from .chat_prompt import CHAT_PROMPT
 from .codereview_prompt import CODEREVIEW_PROMPT
 from .debug_prompt import DEBUG_ISSUE_PROMPT
 from .precommit_prompt import PRECOMMIT_PROMPT
+from .refactor_prompt import REFACTOR_PROMPT
+from .testgen_prompt import TESTGEN_PROMPT
 from .thinkdeep_prompt import THINKDEEP_PROMPT
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "ANALYZE_PROMPT",
     "CHAT_PROMPT",
     "PRECOMMIT_PROMPT",
+    "REFACTOR_PROMPT",
+    "TESTGEN_PROMPT",
 ]

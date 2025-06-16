@@ -55,6 +55,8 @@ class TestClaudeContinuationOffers:
     """Test Claude continuation offer functionality"""
 
     def setup_method(self):
+        # Note: Tool creation and schema generation happens here
+        # If providers are not registered yet, tool might detect auto mode
         self.tool = ClaudeContinuationTool()
         # Set default model to avoid effective auto mode
         self.tool.default_model = "gemini-2.5-flash-preview-05-20"
@@ -63,11 +65,15 @@ class TestClaudeContinuationOffers:
     @patch.dict("os.environ", {"PYTEST_CURRENT_TEST": ""}, clear=False)
     async def test_new_conversation_offers_continuation(self, mock_redis):
         """Test that new conversations offer Claude continuation opportunity"""
+        # Create tool AFTER providers are registered (in conftest.py fixture)
+        tool = ClaudeContinuationTool()
+        tool.default_model = "gemini-2.5-flash-preview-05-20"
+
         mock_client = Mock()
         mock_redis.return_value = mock_client
 
         # Mock the model
-        with patch.object(self.tool, "get_model_provider") as mock_get_provider:
+        with patch.object(tool, "get_model_provider") as mock_get_provider:
             mock_provider = create_mock_provider()
             mock_provider.get_provider_type.return_value = Mock(value="google")
             mock_provider.supports_thinking_mode.return_value = False
@@ -81,7 +87,7 @@ class TestClaudeContinuationOffers:
 
             # Execute tool without continuation_id (new conversation)
             arguments = {"prompt": "Analyze this code"}
-            response = await self.tool.execute(arguments)
+            response = await tool.execute(arguments)
 
             # Parse response
             response_data = json.loads(response[0].text)
@@ -146,8 +152,8 @@ class TestClaudeContinuationOffers:
             # Should still offer continuation since turns remain
             assert response_data["status"] == "continuation_available"
             assert "continuation_offer" in response_data
-            # 10 max - 2 existing - 1 new = 7 remaining
-            assert response_data["continuation_offer"]["remaining_turns"] == 7
+            # MAX_CONVERSATION_TURNS - 2 existing - 1 new = remaining
+            assert response_data["continuation_offer"]["remaining_turns"] == MAX_CONVERSATION_TURNS - 3
 
     @patch("utils.conversation_memory.get_redis_client")
     @patch.dict("os.environ", {"PYTEST_CURRENT_TEST": ""}, clear=False)
@@ -176,10 +182,6 @@ class TestClaudeContinuationOffers:
             # Parse response
             assert len(response) == 1
             response_data = json.loads(response[0].text)
-
-            # Debug output
-            if response_data.get("status") == "error":
-                print(f"Error content: {response_data.get('content')}")
 
             assert response_data["status"] == "continuation_available"
             assert response_data["content"] == "Analysis complete. The code looks good."
@@ -267,10 +269,10 @@ I'd be happy to examine the error handling patterns in more detail if that would
             # Parse response
             response_data = json.loads(response[0].text)
 
-            # Should offer continuation since there are remaining turns (9 remaining: 10 max - 0 current - 1)
+            # Should offer continuation since there are remaining turns (MAX - 0 current - 1)
             assert response_data["status"] == "continuation_available"
             assert response_data.get("continuation_offer") is not None
-            assert response_data["continuation_offer"]["remaining_turns"] == 9
+            assert response_data["continuation_offer"]["remaining_turns"] == MAX_CONVERSATION_TURNS - 1
 
     @patch("utils.conversation_memory.get_redis_client")
     @patch.dict("os.environ", {"PYTEST_CURRENT_TEST": ""}, clear=False)
@@ -465,8 +467,8 @@ class TestContinuationIntegration:
             # Should still offer continuation if there are remaining turns
             assert response_data2["status"] == "continuation_available"
             assert "continuation_offer" in response_data2
-            # 10 max - 1 existing - 1 new = 8 remaining
-            assert response_data2["continuation_offer"]["remaining_turns"] == 8
+            # MAX_CONVERSATION_TURNS - 1 existing - 1 new = remaining
+            assert response_data2["continuation_offer"]["remaining_turns"] == MAX_CONVERSATION_TURNS - 2
 
 
 if __name__ == "__main__":
