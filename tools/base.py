@@ -877,7 +877,14 @@ When recommending searches, be specific about what information you need and why 
         # Check if request has 'files' attribute (used by most tools)
         if hasattr(request, "files") and request.files:
             for file_path in request.files:
-                if not os.path.isabs(file_path):
+                # Log original path for debugging
+                logger.debug(f"[PATH_VALIDATION] Checking file path: {file_path}")
+                
+                # First translate Windows paths if needed
+                translated_path = translate_path_for_environment(file_path)
+                logger.debug(f"[PATH_VALIDATION] After translation: {translated_path}")
+                
+                if not os.path.isabs(translated_path):
                     return (
                         f"Error: All file paths must be absolute. "
                         f"Received relative path: {file_path}\n"
@@ -886,7 +893,14 @@ When recommending searches, be specific about what information you need and why 
 
         # Check if request has 'path' attribute (used by review_changes tool)
         if hasattr(request, "path") and request.path:
-            if not os.path.isabs(request.path):
+            # Log original path for debugging
+            logger.debug(f"[PATH_VALIDATION] Checking path: {request.path}")
+            
+            # First translate Windows paths if needed
+            translated_path = translate_path_for_environment(request.path)
+            logger.debug(f"[PATH_VALIDATION] After translation: {translated_path}")
+            
+            if not os.path.isabs(translated_path):
                 return (
                     f"Error: Path must be absolute. "
                     f"Received relative path: {request.path}\n"
@@ -975,8 +989,10 @@ When recommending searches, be specific about what information you need and why 
         updated_files = []
 
         for file_path in files:
+            logger.debug(f"[PROMPT_FILE] Checking file: {file_path}")
             # Translate path for current environment (Docker/direct)
             translated_path = translate_path_for_environment(file_path)
+            logger.debug(f"[PROMPT_FILE] Translated to: {translated_path}")
 
             # Check if the filename is exactly "prompt.txt"
             # This ensures we don't match files like "myprompt.txt" or "prompt.txt.bak"
@@ -1040,6 +1056,10 @@ When recommending searches, be specific about what information you need and why 
             # Set up logger for this tool execution
             logger = logging.getLogger(f"tools.{self.name}")
             logger.info(f"🔧 {self.name} tool called with arguments: {list(arguments.keys())}")
+            
+            # Log file paths if present in arguments for debugging
+            if "files" in arguments and arguments["files"]:
+                logger.debug(f"[PATH_DEBUG] Raw file paths from client: {arguments['files']}")
 
             # Validate request using the tool's Pydantic model
             # This ensures all required fields are present and properly typed

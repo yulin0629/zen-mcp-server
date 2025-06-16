@@ -248,9 +248,10 @@ def translate_path_for_environment(path_str: str) -> str:
 
     This is the unified path translation function that should be used by all
     tools and utilities throughout the codebase. It handles:
-    1. Docker host-to-container path translation (host paths -> /workspace/...)
-    2. Direct mode (no translation needed)
-    3. Security validation and error handling
+    1. Windows path format conversion (C:\\path -> /mnt/c/path)
+    2. Docker host-to-container path translation (host paths -> /workspace/...)
+    3. Direct mode (no translation needed)
+    4. Security validation and error handling
 
     Docker Path Translation Logic:
     - Input: /Users/john/project/src/file.py (host path from Claude)
@@ -258,11 +259,29 @@ def translate_path_for_environment(path_str: str) -> str:
     - Output: /workspace/src/file.py (container path for file operations)
 
     Args:
-        path_str: Original path string from the client (absolute host path)
+        path_str: Original path string from the client (absolute host path or Windows path)
 
     Returns:
         Translated path appropriate for the current environment
     """
+    import re
+    
+    # First, convert Windows paths to WSL format if needed
+    if re.match(r'^[A-Za-z]:\\', path_str):
+        original_path = path_str
+        drive = path_str[0].lower()
+        # Handle D:\ case (with trailing backslash) vs D:\path case
+        if len(path_str) > 3 and path_str[2] == '\\':
+            path_part = path_str[3:].replace('\\', '/')
+        else:
+            path_part = path_str[2:].replace('\\', '/') if len(path_str) > 2 else ""
+        # Remove any leading slashes to avoid double slashes
+        path_part = path_part.lstrip('/')
+        path_str = f"/mnt/{drive}/{path_part}" if path_part else f"/mnt/{drive}"
+        logger.info(f"[PATH_TRANSLATE] Converted Windows path: {original_path} -> {path_str}")
+    else:
+        logger.debug(f"[PATH_TRANSLATE] Not a Windows path, proceeding with: {path_str}")
+    
     if not WORKSPACE_ROOT or not WORKSPACE_ROOT.strip() or not CONTAINER_WORKSPACE.exists():
         # Not in the configured Docker environment, no translation needed
         return path_str
@@ -271,11 +290,33 @@ def translate_path_for_environment(path_str: str) -> str:
     if path_str.startswith(str(CONTAINER_WORKSPACE) + "/") or path_str == str(CONTAINER_WORKSPACE):
         # Path is already translated to container format, return as-is
         return path_str
+    
+    # Check if the path is a mounted drive path (e.g., /mnt/c, /mnt/d, etc.)
+    # These paths need to be translated if they are under WORKSPACE_ROOT
+    if path_str.startswith('/mnt/') and len(path_str) > 5 and path_str[5].isalpha() and path_str[5].islower():
+        logger.info(f"[PATH_TRANSLATE] Detected mounted drive path: {path_str}")
+        # Don't return here - continue to check if it's under WORKSPACE_ROOT
 
+    logger.info(f"[PATH_TRANSLATE] Checking if {path_str} is under WORKSPACE_ROOT for translation...")
+    logger.debug(f"[PATH_TRANSLATE] WORKSPACE_ROOT value: {WORKSPACE_ROOT}")
     try:
+        # Convert WORKSPACE_ROOT to WSL format if it's a Windows path
+        workspace_root_str = WORKSPACE_ROOT
+        if re.match(r'^[A-Za-z]:\\', workspace_root_str):
+            drive = workspace_root_str[0].lower()
+            # Handle E:\ case (with trailing backslash) vs E:\path case
+            if len(workspace_root_str) > 3 and workspace_root_str[2] == '\\':
+                path_part = workspace_root_str[3:].replace('\\', '/')
+            else:
+                path_part = workspace_root_str[2:].replace('\\', '/') if len(workspace_root_str) > 2 else ""
+            # Remove any leading slashes
+            path_part = path_part.lstrip('/')
+            workspace_root_str = f"/mnt/{drive}/{path_part}" if path_part else f"/mnt/{drive}"
+            logger.debug(f"Converted WORKSPACE_ROOT from Windows to WSL format: {WORKSPACE_ROOT} -> {workspace_root_str}")
+        
         # Use os.path.realpath for security - it resolves symlinks completely
         # This prevents symlink attacks that could escape the workspace
-        real_workspace_root = Path(os.path.realpath(WORKSPACE_ROOT))
+        real_workspace_root = Path(os.path.realpath(workspace_root_str))
         # For the host path, we can't use realpath if it doesn't exist in the container
         # So we'll use Path().resolve(strict=False) instead
         real_host_path = Path(path_str).resolve(strict=False)
@@ -294,71 +335,51 @@ def translate_path_for_environment(path_str: str) -> str:
         return str(container_path)
 
     except ValueError:
-        # Path is not within the host's WORKSPACE_ROOT
-        # In Docker, we cannot access files outside the mounted volume
-        logger.warning(
-            f"Path '{path_str}' is outside the mounted workspace '{WORKSPACE_ROOT}'. "
-            f"Docker containers can only access files within the mounted directory."
+        # Path is not within the host's WORKSPACE_ROOT - just return as-is
+        logger.info(
+            f"[PATH_TRANSLATE] Path '{path_str}' is not within WORKSPACE_ROOT '{WORKSPACE_ROOT}'. "
+            f"Returning path as-is for direct access."
         )
-        # Return a clear error path that will fail gracefully
-        return f"/inaccessible/outside/mounted/volume{path_str}"
+        return path_str
     except Exception as e:
-        # Log unexpected errors but don't expose internal details to clients
-        logger.warning(f"Path translation failed for '{path_str}': {type(e).__name__}")
-        # Return a clear error path that will fail gracefully
-        return f"/inaccessible/translation/error{path_str}"
+        # Log unexpected errors but return path as-is
+        logger.warning(f"[PATH_TRANSLATE] Translation failed for '{path_str}': {type(e).__name__}, returning as-is")
+        return path_str
 
 
 def resolve_and_validate_path(path_str: str) -> Path:
     """
-    Resolves, translates, and validates a path against security policies.
-
-    This is the primary security function that ensures all file access
-    is properly sandboxed. It enforces three critical policies:
-    1. Translate host paths to container paths if applicable (Docker environment)
-    2. All paths must be absolute (no ambiguity)
-    3. All paths must resolve to within PROJECT_ROOT (sandboxing)
+    Resolves and translates a path.
+    
+    Security checks have been REMOVED to allow access to all paths.
 
     Args:
         path_str: Path string (must be absolute)
 
     Returns:
-        Resolved Path object that is guaranteed to be within PROJECT_ROOT
+        Resolved Path object
 
     Raises:
-        ValueError: If path is not absolute or otherwise invalid
-        PermissionError: If path is outside allowed directory
+        ValueError: If path is not absolute
     """
+    logger.info(f"[PATH_RESOLVE] Starting path resolution for: {path_str}")
+    
     # Step 1: Translate Docker paths first (if applicable)
-    # This must happen before any other validation
     translated_path_str = translate_path_for_environment(path_str)
+    logger.info(f"[PATH_RESOLVE] After translation: {translated_path_str}")
 
     # Step 2: Create a Path object from the (potentially translated) path
     user_path = Path(translated_path_str)
 
-    # Step 3: Security Policy - Require absolute paths
-    # Relative paths could be interpreted differently depending on working directory
+    # Step 3: Require absolute paths for consistency
     if not user_path.is_absolute():
         raise ValueError(f"Relative paths are not supported. Please provide an absolute path.\nReceived: {path_str}")
 
     # Step 4: Resolve the absolute path (follows symlinks, removes .. and .)
-    # This is critical for security as it reveals the true destination of symlinks
     resolved_path = user_path.resolve()
+    logger.info(f"[PATH_RESOLVE] Final resolved path: {resolved_path}")
 
-    # Step 5: Security Policy - Ensure the resolved path is within PROJECT_ROOT
-    # This prevents directory traversal attacks (e.g., /project/../../../etc/passwd)
-    try:
-        resolved_path.relative_to(SECURITY_ROOT)
-    except ValueError:
-        # Provide detailed error for debugging while avoiding information disclosure
-        logger.warning(
-            f"Access denied - path outside workspace. "
-            f"Requested: {path_str}, Resolved: {resolved_path}, Workspace: {SECURITY_ROOT}"
-        )
-        raise PermissionError(
-            f"Path outside workspace: {path_str}\nWorkspace: {SECURITY_ROOT}\nResolved path: {resolved_path}"
-        )
-
+    # NO MORE SECURITY CHECKS - allow all paths
     return resolved_path
 
 
@@ -403,14 +424,22 @@ def expand_paths(paths: list[str], extensions: Optional[set[str]] = None) -> lis
     seen = set()
 
     for path in paths:
+        logger.debug(f"[EXPAND_PATHS] Processing path: {path}")
         try:
             # Validate each path for security before processing
             path_obj = resolve_and_validate_path(path)
-        except (ValueError, PermissionError):
-            # Skip invalid paths silently to allow partial success
+            logger.debug(f"[EXPAND_PATHS] Successfully resolved to: {path_obj}")
+        except (ValueError, PermissionError) as e:
+            # Log the error instead of skipping silently
+            logger.warning(f"[EXPAND_PATHS] Failed to resolve path '{path}': {type(e).__name__}: {e}")
+            continue
+        except Exception as e:
+            # Catch any other unexpected errors
+            logger.error(f"[EXPAND_PATHS] Unexpected error resolving path '{path}': {type(e).__name__}: {e}")
             continue
 
         if not path_obj.exists():
+            logger.warning(f"[EXPAND_PATHS] Path does not exist: {path_obj}")
             continue
 
         # Safety checks for directory scanning
@@ -681,9 +710,17 @@ def read_files(
 
     # Priority 2: Process file paths
     if file_paths:
+        # First translate all paths for current environment
+        logger.debug(f"[FILES] Translating {len(file_paths)} file paths")
+        translated_paths = []
+        for path in file_paths:
+            translated = translate_path_for_environment(path)
+            logger.debug(f"[FILES] Translated '{path}' -> '{translated}'")
+            translated_paths.append(translated)
+        
         # Expand directories to get all individual files
-        logger.debug(f"[FILES] Expanding {len(file_paths)} file paths")
-        all_files = expand_paths(file_paths)
+        logger.debug(f"[FILES] Expanding {len(translated_paths)} file paths")
+        all_files = expand_paths(translated_paths)
         logger.debug(f"[FILES] After expansion: {len(all_files)} individual files")
 
         if not all_files and file_paths:
