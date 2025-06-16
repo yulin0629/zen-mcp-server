@@ -18,8 +18,13 @@ from .base import BaseTool, ToolRequest
 class ThinkDeepRequest(ToolRequest):
     """Request model for thinkdeep tool"""
 
-    prompt: str = Field(..., description="Your current thinking/analysis to extend and validate")
-    problem_context: Optional[str] = Field(None, description="Additional context about the problem or goal")
+    prompt: str = Field(
+        ...,
+        description="Your current thinking/analysis to extend and validate. IMPORTANT: Before using this tool, Claude MUST first think hard and establish a deep understanding of the topic and question by thinking through all relevant details, context, constraints, and implications. Share these extended thoughts and ideas in the prompt so the model has comprehensive information to work with for the best analysis.",
+    )
+    problem_context: Optional[str] = Field(
+        None, description="Additional context about the problem or goal. Be as expressive as possible."
+    )
     focus_areas: Optional[list[str]] = Field(
         None,
         description="Specific aspects to focus on (architecture, performance, security, etc.)",
@@ -27,6 +32,10 @@ class ThinkDeepRequest(ToolRequest):
     files: Optional[list[str]] = Field(
         None,
         description="Optional file paths or directories for additional context (must be absolute paths)",
+    )
+    images: Optional[list[str]] = Field(
+        None,
+        description="Optional images for visual analysis - diagrams, charts, system architectures, or any visual information to analyze",
     )
 
 
@@ -55,12 +64,18 @@ class ThinkDeepTool(BaseTool):
             "properties": {
                 "prompt": {
                     "type": "string",
-                    "description": "Your current thinking/analysis to extend and validate",
+                    "description": (
+                        "Your current thinking/analysis to extend and validate. IMPORTANT: Before using this tool, "
+                        "Claude MUST first think deeply and establish a deep understanding of the topic and question "
+                        "by thinking through all relevant details, context, constraints, and implications. Share "
+                        "these extended thoughts and ideas in the prompt so the model has comprehensive information "
+                        "to work with for the best analysis."
+                    ),
                 },
                 "model": self.get_model_field_schema(),
                 "problem_context": {
                     "type": "string",
-                    "description": "Additional context about the problem or goal",
+                    "description": "Additional context about the problem or goal. Be as expressive as possible.",
                 },
                 "focus_areas": {
                     "type": "array",
@@ -71,6 +86,11 @@ class ThinkDeepTool(BaseTool):
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Optional file paths or directories for additional context (must be absolute paths)",
+                },
+                "images": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional images for visual analysis - diagrams, charts, system architectures, or any visual information to analyze",
                 },
                 "temperature": {
                     "type": "number",
@@ -137,6 +157,14 @@ class ThinkDeepTool(BaseTool):
         # Update request files list
         if updated_files is not None:
             request.files = updated_files
+
+        # MCP boundary check - STRICT REJECTION
+        if request.files:
+            file_size_check = self.check_total_file_size(request.files)
+            if file_size_check:
+                from tools.models import ToolOutput
+
+                raise ValueError(f"MCP_SIZE_CHECK:{ToolOutput(**file_size_check).model_dump_json()}")
 
         # Build context parts
         context_parts = [f"=== CLAUDE'S CURRENT ANALYSIS ===\n{current_analysis}\n=== END ANALYSIS ==="]

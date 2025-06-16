@@ -6,10 +6,12 @@ from .analyze import AnalyzeTool
 from .chat import ChatTool
 from .codereview import CodeReviewTool
 from .debug import DebugIssueTool
+from .listmodels import ListModelsTool
 from .precommit import Precommit
 from .refactor import RefactorTool
-from .testgen import TestGenTool
+from .testgen import TestGenerationTool
 from .thinkdeep import ThinkDeepTool
+from .tracer import TracerTool
 
 __all__ = [
     "ThinkDeepTool",
@@ -17,7 +19,9 @@ __all__ = [
     "DebugIssueTool",
     "AnalyzeTool",
     "ChatTool",
+    "ListModelsTool",
     "Precommit",
     "RefactorTool",
-    "TestGenTool",
+    "TestGenerationTool",
+    "TracerTool",
 ]
