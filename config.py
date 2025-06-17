@@ -14,9 +14,9 @@ import os
 # These values are used in server responses and for tracking releases
 # IMPORTANT: This is the single source of truth for version and author info
 # Semantic versioning: MAJOR.MINOR.PATCH
-__version__ = "4.8.3"
+__version__ = "4.9.2"
 # Last update date in ISO format
-__updated__ = "2025-06-16"
+__updated__ = "2025-06-17"
 # Primary maintainer
 __author__ = "Fahad Gilani"
 
@@ -100,6 +100,14 @@ TEMPERATURE_CREATIVE = 0.7  # For architecture, deep thinking
 # DEFAULT_THINKING_MODE_THINKDEEP: Default thinking depth for extended reasoning tool
 # Higher modes use more computational budget but provide deeper analysis
 DEFAULT_THINKING_MODE_THINKDEEP = os.getenv("DEFAULT_THINKING_MODE_THINKDEEP", "high")
+
+# Consensus Tool Defaults
+# Consensus timeout and rate limiting settings
+DEFAULT_CONSENSUS_TIMEOUT = 120.0  # 2 minutes per model
+DEFAULT_CONSENSUS_MAX_INSTANCES_PER_COMBINATION = 2
+
+# NOTE: Consensus tool now uses sequential processing for MCP compatibility
+# Concurrent processing was removed to avoid async pattern violations
 
 # MCP Protocol Transport Limits
 #

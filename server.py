@@ -25,7 +25,7 @@ import sys
 import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import Any
+from typing import Any, Optional
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
@@ -34,6 +34,7 @@ from mcp.types import (
     GetPromptResult,
     Prompt,
     PromptMessage,
+    PromptsCapability,
     ServerCapabilities,
     TextContent,
     Tool,
@@ -50,6 +51,7 @@ from tools import (
     AnalyzeTool,
     ChatTool,
     CodeReviewTool,
+    ConsensusTool,
     DebugIssueTool,
     ListModelsTool,
     Precommit,
@@ -157,6 +159,7 @@ TOOLS = {
     "debug": DebugIssueTool(),  # Root cause analysis and debugging assistance
     "analyze": AnalyzeTool(),  # General-purpose file and code analysis
     "chat": ChatTool(),  # Interactive development chat and brainstorming
+    "consensus": ConsensusTool(),  # Multi-model consensus for diverse perspectives on technical proposals
     "listmodels": ListModelsTool(),  # List all available AI models by provider
     "precommit": Precommit(),  # Pre-commit validation of git changes
     "testgen": TestGenerationTool(),  # Comprehensive test generation with edge case coverage
@@ -519,6 +522,78 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
     if name in TOOLS:
         logger.info(f"Executing tool '{name}' with {len(arguments)} parameter(s)")
         tool = TOOLS[name]
+
+        # EARLY MODEL RESOLUTION AT MCP BOUNDARY
+        # Resolve model before passing to tool - this ensures consistent model handling
+        # NOTE: Consensus tool is exempt as it handles multiple models internally
+        from providers.registry import ModelProviderRegistry
+        from utils.file_utils import check_total_file_size
+        from utils.model_context import ModelContext
+
+        # Get model from arguments or use default
+        model_name = arguments.get("model") or DEFAULT_MODEL
+        logger.debug(f"Initial model for {name}: {model_name}")
+
+        # Parse model:option format if present
+        model_name, model_option = parse_model_option(model_name)
+        if model_option:
+            logger.debug(f"Parsed model format - model: '{model_name}', option: '{model_option}'")
+
+        # Consensus tool handles its own model configuration validation
+        # No special handling needed at server level
+
+        # Handle auto mode at MCP boundary - resolve to specific model
+        if model_name.lower() == "auto":
+            # Get tool category to determine appropriate model
+            tool_category = tool.get_model_category()
+            resolved_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
+            logger.info(f"Auto mode resolved to {resolved_model} for {name} (category: {tool_category.value})")
+            model_name = resolved_model
+            # Update arguments with resolved model
+            arguments["model"] = model_name
+
+        # Validate model availability at MCP boundary
+        provider = ModelProviderRegistry.get_provider_for_model(model_name)
+        if not provider:
+            # Get list of available models for error message
+            available_models = list(ModelProviderRegistry.get_available_models(respect_restrictions=True).keys())
+            tool_category = tool.get_model_category()
+            suggested_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
+
+            error_message = (
+                f"Model '{model_name}' is not available with current API keys. "
+                f"Available models: {', '.join(available_models)}. "
+                f"Suggested model for {name}: '{suggested_model}' "
+                f"(category: {tool_category.value})"
+            )
+            error_output = ToolOutput(
+                status="error",
+                content=error_message,
+                content_type="text",
+                metadata={"tool_name": name, "requested_model": model_name},
+            )
+            return [TextContent(type="text", text=error_output.model_dump_json())]
+
+        # Create model context with resolved model and option
+        model_context = ModelContext(model_name, model_option)
+        arguments["_model_context"] = model_context
+        arguments["_resolved_model_name"] = model_name
+        logger.debug(
+            f"Model context created for {model_name} with {model_context.capabilities.context_window} token capacity"
+        )
+        if model_option:
+            logger.debug(f"Model option stored in context: '{model_option}'")
+
+        # EARLY FILE SIZE VALIDATION AT MCP BOUNDARY
+        # Check file sizes before tool execution using resolved model
+        if "files" in arguments and arguments["files"]:
+            logger.debug(f"Checking file sizes for {len(arguments['files'])} files with model {model_name}")
+            file_size_check = check_total_file_size(arguments["files"], model_name)
+            if file_size_check:
+                logger.warning(f"File size check failed for {name} with model {model_name}")
+                return [TextContent(type="text", text=ToolOutput(**file_size_check).model_dump_json())]
+
+        # Execute tool with pre-resolved model context
         result = await tool.execute(arguments)
         logger.info(f"Tool '{name}' execution completed")
 
@@ -540,6 +615,24 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
     # Handle unknown tool requests gracefully
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+
+def parse_model_option(model_string: str) -> tuple[str, Optional[str]]:
+    """
+    Parse model:option format into model name and option.
+
+    Args:
+        model_string: String that may contain "model:option" format
+
+    Returns:
+        tuple: (model_name, option) where option may be None
+    """
+    if ":" in model_string and not model_string.startswith("http"):  # Avoid parsing URLs
+        parts = model_string.split(":", 1)
+        model_name = parts[0].strip()
+        model_option = parts[1].strip() if len(parts) > 1 else None
+        return model_name, model_option
+    return model_string.strip(), None
 
 
 def get_follow_up_instructions(current_turn_count: int, max_turns: int = None) -> str:
@@ -708,7 +801,12 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
         # Capture files referenced in this turn
         user_files = arguments.get("files", [])
         logger.debug(f"[CONVERSATION_DEBUG] Adding user turn to thread {continuation_id}")
-        logger.debug(f"[CONVERSATION_DEBUG] User prompt length: {len(user_prompt)} chars")
+        from utils.token_utils import estimate_tokens
+
+        user_prompt_tokens = estimate_tokens(user_prompt)
+        logger.debug(
+            f"[CONVERSATION_DEBUG] User prompt length: {len(user_prompt)} chars (~{user_prompt_tokens:,} tokens)"
+        )
         logger.debug(f"[CONVERSATION_DEBUG] User files: {user_files}")
         success = add_turn(continuation_id, "user", user_prompt, files=user_files)
         if not success:
@@ -728,7 +826,9 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
     logger.debug(f"[CONVERSATION_DEBUG] Using model: {model_context.model_name}")
     conversation_history, conversation_tokens = build_conversation_history(context, model_context)
     logger.debug(f"[CONVERSATION_DEBUG] Conversation history built: {conversation_tokens:,} tokens")
-    logger.debug(f"[CONVERSATION_DEBUG] Conversation history length: {len(conversation_history)} chars")
+    logger.debug(
+        f"[CONVERSATION_DEBUG] Conversation history length: {len(conversation_history)} chars (~{conversation_tokens:,} tokens)"
+    )
 
     # Add dynamic follow-up instructions based on turn count
     follow_up_instructions = get_follow_up_instructions(len(context.turns))
@@ -737,7 +837,10 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
     # All tools now use standardized 'prompt' field
     original_prompt = arguments.get("prompt", "")
     logger.debug("[CONVERSATION_DEBUG] Extracting user input from 'prompt' field")
-    logger.debug(f"[CONVERSATION_DEBUG] User input length: {len(original_prompt)} chars")
+    original_prompt_tokens = estimate_tokens(original_prompt) if original_prompt else 0
+    logger.debug(
+        f"[CONVERSATION_DEBUG] User input length: {len(original_prompt)} chars (~{original_prompt_tokens:,} tokens)"
+    )
 
     # Merge original context with new prompt and follow-up instructions
     if conversation_history:
@@ -963,66 +1066,46 @@ async def handle_get_prompt(name: str, arguments: dict[str, Any] = None) -> GetP
     """
     logger.debug(f"MCP client requested prompt: {name} with args: {arguments}")
 
-    # Parse structured prompt names like "chat:o3" or "chat:continue"
-    parsed_model = None
-    is_continuation = False
-    base_name = name
-
-    if ":" in name:
-        parts = name.split(":", 1)
-        base_name = parts[0]
-        second_part = parts[1]
-
-        # Check if the second part is "continue" (special keyword)
-        if second_part.lower() == "continue":
-            is_continuation = True
-            logger.debug(f"Parsed continuation prompt: tool='{base_name}', continue=True")
-        else:
-            parsed_model = second_part
-            logger.debug(f"Parsed structured prompt: tool='{base_name}', model='{parsed_model}'")
-
-    # Handle special "continue" cases
-    if base_name.lower() == "continue":
+    # Handle special "continue" case
+    if name.lower() == "continue":
         # This is "/zen:continue" - use chat tool as default for continuation
         tool_name = "chat"
-        is_continuation = True
         template_info = {
             "name": "continue",
             "description": "Continue the previous conversation",
             "template": "Continue the conversation",
         }
-        logger.debug("Using /zen:continue - defaulting to chat tool with continuation")
+        logger.debug("Using /zen:continue - defaulting to chat tool")
     else:
         # Find the corresponding tool by checking prompt names
         tool_name = None
         template_info = None
 
-        # Check if it's a known prompt name (using base_name)
+        # Check if it's a known prompt name
         for t_name, t_info in PROMPT_TEMPLATES.items():
-            if t_info["name"] == base_name:
+            if t_info["name"] == name:
                 tool_name = t_name
                 template_info = t_info
                 break
 
         # If not found, check if it's a direct tool name
-        if not tool_name and base_name in TOOLS:
-            tool_name = base_name
+        if not tool_name and name in TOOLS:
+            tool_name = name
             template_info = {
-                "name": base_name,
-                "description": f"Use {base_name} tool",
-                "template": f"Use {base_name}",
+                "name": name,
+                "description": f"Use {name} tool",
+                "template": f"Use {name}",
             }
 
         if not tool_name:
-            logger.error(f"Unknown prompt requested: {name} (base: {base_name})")
+            logger.error(f"Unknown prompt requested: {name}")
             raise ValueError(f"Unknown prompt: {name}")
 
     # Get the template
     template = template_info.get("template", f"Use {tool_name}")
 
     # Safe template expansion with defaults
-    # Prioritize: parsed model > arguments model > "auto"
-    final_model = parsed_model or (arguments.get("model", "auto") if arguments else "auto")
+    final_model = arguments.get("model", "auto") if arguments else "auto"
 
     prompt_args = {
         "model": final_model,
@@ -1038,19 +1121,12 @@ async def handle_get_prompt(name: str, arguments: dict[str, Any] = None) -> GetP
         logger.warning(f"Missing template argument {e} for prompt {name}, using raw template")
         prompt_text = template  # Fallback to raw template
 
-    # Generate tool call instruction based on the type of prompt
-    if is_continuation:
-        if base_name.lower() == "continue":
-            # "/zen:continue" case
-            tool_instruction = f"Continue the previous conversation using the {tool_name} tool"
-        else:
-            # "/zen:chat:continue" case
-            tool_instruction = f"Continue the previous conversation using the {tool_name} tool"
-    elif parsed_model:
-        # "/zen:chat:o3" case
-        tool_instruction = f"Use the {tool_name} tool with model '{parsed_model}'"
+    # Generate tool call instruction
+    if name.lower() == "continue":
+        # "/zen:continue" case
+        tool_instruction = f"Continue the previous conversation using the {tool_name} tool"
     else:
-        # "/zen:chat" case
+        # Simple prompt case
         tool_instruction = prompt_text
 
     return GetPromptResult(
@@ -1111,10 +1187,17 @@ async def main():
             InitializationOptions(
                 server_name="zen",
                 server_version=__version__,
-                capabilities=ServerCapabilities(tools=ToolsCapability()),  # Advertise tool support capability
+                capabilities=ServerCapabilities(
+                    tools=ToolsCapability(),  # Advertise tool support capability
+                    prompts=PromptsCapability(),  # Advertise prompt support capability
+                ),
             ),
         )
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        pass
