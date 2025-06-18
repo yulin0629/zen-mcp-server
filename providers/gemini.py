@@ -41,6 +41,7 @@ class GeminiModelProvider(ModelProvider):
     # Thinking mode configurations - percentages of model's max_thinking_tokens
     # These percentages work across all models that support thinking
     THINKING_BUDGETS = {
+        "none": 0.0,  # Special mode to disable thinking budget for max context
         "minimal": 0.005,  # 0.5% of max - minimal thinking for fast responses
         "low": 0.08,  # 8% of max - light reasoning tasks
         "medium": 0.33,  # 33% of max - balanced reasoning (default)
@@ -51,13 +52,26 @@ class GeminiModelProvider(ModelProvider):
     def __init__(self, api_key: str, **kwargs):
         """Initialize Gemini provider with API key."""
         super().__init__(api_key, **kwargs)
-        self._client = None
+        genai.configure(api_key=self.api_key)
+        self._model_cache = {}  # Cache for GenerativeModel instances
         self._token_counters = {}  # Cache for token counting
+
+    def _get_model(self, model_name: str, system_prompt: Optional[str] = None) -> genai.GenerativeModel:
+        """Get a cached GenerativeModel instance."""
+        cache_key = (model_name, system_prompt)
+        if cache_key not in self._model_cache:
+            self._model_cache[cache_key] = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=system_prompt
+            )
+        return self._model_cache[cache_key]
 
     @property
     def client(self):
         """Lazy initialization of Gemini client."""
-        if self._client is None:
+        # This property is kept for backward compatibility or other methods that might use it,
+        # but generate_content will now use the _get_model method.
+        if not hasattr(self, "_client") or self._client is None:
             self._client = genai.Client(api_key=self.api_key)
         return self._client
 
@@ -113,16 +127,12 @@ class GeminiModelProvider(ModelProvider):
         resolved_name = self._resolve_model_name(model_name)
         self.validate_parameters(model_name, temperature)
 
+        # Get the model from cache, configured with the system prompt
+        model = self._get_model(resolved_name, system_prompt)
+
         # Prepare content parts (text and potentially images)
-        parts = []
-
-        # Add system and user prompts as text
-        if system_prompt:
-            full_prompt = f"{system_prompt}\n\n{prompt}"
-        else:
-            full_prompt = prompt
-
-        parts.append({"text": full_prompt})
+        # The prompt is now the first part, system_prompt is handled by the model
+        parts = [prompt]
 
         # Add images if provided and model supports vision
         if images and self._supports_vision(resolved_name):
@@ -137,9 +147,6 @@ class GeminiModelProvider(ModelProvider):
                     continue
         elif images and not self._supports_vision(resolved_name):
             logger.warning(f"Model {resolved_name} does not support images, ignoring {len(images)} image(s)")
-
-        # Create contents structure
-        contents = [{"parts": parts}]
 
         # Prepare generation config
         generation_config = types.GenerateContentConfig(
@@ -158,8 +165,47 @@ class GeminiModelProvider(ModelProvider):
             model_config = self.SUPPORTED_MODELS.get(resolved_name)
             if model_config and "max_thinking_tokens" in model_config:
                 max_thinking_tokens = model_config["max_thinking_tokens"]
-                actual_thinking_budget = int(max_thinking_tokens * self.THINKING_BUDGETS[thinking_mode])
-                generation_config.thinking_config = types.ThinkingConfig(thinking_budget=actual_thinking_budget)
+                budget_percent = self.THINKING_BUDGETS.get(thinking_mode, 0.0)
+                actual_thinking_budget = int(max_thinking_tokens * budget_percent)
+
+                if actual_thinking_budget > 0:
+                    generation_config.thinking_config = types.ThinkingConfig(thinking_budget=actual_thinking_budget)
+                    logger.info(f"Gemini thinking mode '{thinking_mode}' enabled with budget {actual_thinking_budget}.")
+                else:
+                    logger.info(f"Gemini thinking mode is '{thinking_mode}', not setting thinking_config to allow for larger context.")
+            else:
+                logger.warning(f"Could not find max_thinking_tokens for {resolved_name} to set thinking budget.")
+        elif capabilities.supports_extended_thinking:
+            logger.warning(f"Invalid thinking_mode '{thinking_mode}' for Gemini. Not setting thinking_config.")
+
+        # Log the token estimation before sending
+        try:
+            from utils.token_utils import count_tokens
+
+            # For logging, create a representation of the full prompt
+            full_prompt_for_logging = prompt
+            if system_prompt:
+                # This is just for logging purposes to reflect what's being sent
+                full_prompt_for_logging = f"SYSTEM: {system_prompt}\n\nUSER: {prompt}"
+
+            prompt_tokens = count_tokens(full_prompt_for_logging, resolved_name)
+            thinking_budget_val = 0
+            if generation_config and hasattr(generation_config, "thinking_config") and generation_config.thinking_config:
+                thinking_budget_val = generation_config.thinking_config.thinking_budget
+
+            logger.info(
+                f"Gemini request for {resolved_name}: "
+                f"Estimated prompt tokens: {prompt_tokens}, "
+                f"Thinking budget: {thinking_budget_val}, "
+                f"Max output tokens: {max_output_tokens}"
+            )
+            total_tokens = prompt_tokens + thinking_budget_val + (max_output_tokens or 0)
+            logger.info(f"Estimated total tokens (prompt + thinking + max_output): {total_tokens}")
+
+        except ImportError:
+            logger.warning("Could not import token_utils for pre-request logging.")
+        except Exception as e:
+            logger.warning(f"Error during pre-request token logging: {e}", exc_info=True)
 
         # Retry logic with progressive delays
         max_retries = 4  # Total of 4 attempts
@@ -169,11 +215,10 @@ class GeminiModelProvider(ModelProvider):
 
         for attempt in range(max_retries):
             try:
-                # Generate content
-                response = self.client.models.generate_content(
-                    model=resolved_name,
-                    contents=contents,
-                    config=generation_config,
+                # Generate content using the high-level GenerativeModel class
+                response = model.generate_content(
+                    contents=parts,
+                    generation_config=generation_config,
                 )
 
                 # Extract usage information if available

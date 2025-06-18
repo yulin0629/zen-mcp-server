@@ -113,19 +113,19 @@ class ModelContext:
         """
         total_tokens = self.capabilities.context_window
 
-        # Dynamic allocation based on model capacity
+        # Dynamic allocation based on model capacity - INCREASED FILE ALLOCATION
         if total_tokens < 300_000:
-            # Smaller context models (O3): Conservative allocation
-            content_ratio = 0.6  # 60% for content
-            response_ratio = 0.4  # 40% for response
-            file_ratio = 0.3  # 30% of content for files
-            history_ratio = 0.5  # 50% of content for history
+            # Smaller context models (O3): Conservative but improved allocation
+            content_ratio = 0.65  # Increased from 0.6 to 0.65
+            response_ratio = 0.35  # 35% for response
+            file_ratio = 0.4  # Increased from 0.3 to 0.4 (40% of content for files)
+            history_ratio = 0.4  # 40% of content for history
         else:
             # Larger context models (Gemini): More generous allocation
-            content_ratio = 0.8  # 80% for content
-            response_ratio = 0.2  # 20% for response
-            file_ratio = 0.4  # 40% of content for files
-            history_ratio = 0.4  # 40% of content for history
+            content_ratio = 0.85  # Increased from 0.8 to 0.85
+            response_ratio = 0.15  # 15% for response
+            file_ratio = 0.5  # Increased from 0.4 to 0.5 (50% of content for files)
+            history_ratio = 0.35  # 35% of content for history
 
         # Calculate allocations
         content_tokens = int(total_tokens * content_ratio)

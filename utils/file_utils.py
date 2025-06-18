@@ -1137,21 +1137,39 @@ def check_total_file_size(files: list[str], model_name: str) -> Optional[dict]:
     from utils.model_context import ModelContext
 
     model_context = ModelContext(model_name)
+    
+    # Log model resolution for debugging
+    try:
+        capabilities = model_context.capabilities
+        logger.info(f"Model resolved to: {capabilities.model_name} with {capabilities.context_window:,} tokens context window")
+    except Exception as e:
+        logger.error(f"Failed to resolve model '{model_name}': {e}")
+        raise
+    
     token_allocation = model_context.calculate_token_allocation()
 
-    # Dynamic threshold based on model capacity
+    # Log detailed calculation for debugging
+    logger.info(f"Token allocation: total={token_allocation.total_tokens:,}, content={token_allocation.content_tokens:,}, file={token_allocation.file_tokens:,}")
+
+    # Dynamic threshold based on model capacity - INCREASED LIMITS
     context_window = token_allocation.total_tokens
     if context_window >= 1_000_000:  # Gemini-class models
-        threshold_percent = 0.8  # Can be more generous
+        threshold_percent = 0.95  # Very generous for large context models
     elif context_window >= 500_000:  # Mid-range models
-        threshold_percent = 0.7  # Moderate
-    else:  # OpenAI-class models (200K)
-        threshold_percent = 0.6  # Conservative
+        threshold_percent = 0.85  # More generous for mid-range
+    elif context_window >= 200_000:  # OpenAI O3/O4 class models
+        threshold_percent = 0.8   # Increased from 0.6 to 0.8
+    else:  # Smaller models
+        threshold_percent = 0.7   # Conservative but improved
 
     max_file_tokens = int(token_allocation.file_tokens * threshold_percent)
 
+    logger.info(f"Calculated limits: context_window={context_window:,}, threshold={threshold_percent:.1%}, max_file_tokens={max_file_tokens:,}")
+
     # Use centralized file size checking (threshold already applied to max_file_tokens)
     within_limit, total_estimated_tokens, file_count = check_files_size_limit(files, max_file_tokens)
+
+    logger.info(f"File size check result: {file_count} files, {total_estimated_tokens:,} tokens estimated, limit={max_file_tokens:,}, within_limit={within_limit}")
 
     if not within_limit:
         return {

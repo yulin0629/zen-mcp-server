@@ -184,46 +184,46 @@ def is_binary_file(file_path: str) -> bool:
 # File-type specific token-to-byte ratios for accurate token estimation
 # Based on empirical analysis of file compression characteristics and tokenization patterns
 TOKEN_ESTIMATION_RATIOS = {
-    # Programming languages
-    ".py": 3.5,  # Python - moderate verbosity
-    ".js": 3.2,  # JavaScript - compact syntax
-    ".ts": 3.3,  # TypeScript - type annotations add tokens
-    ".jsx": 3.1,  # React JSX - JSX tags are tokenized efficiently
-    ".tsx": 3.0,  # React TSX - combination of TypeScript + JSX
-    ".java": 3.6,  # Java - verbose syntax, long identifiers
-    ".cpp": 3.7,  # C++ - preprocessor directives, templates
-    ".c": 3.8,  # C - function definitions, struct declarations
-    ".go": 3.9,  # Go - explicit error handling, package names
-    ".rs": 3.5,  # Rust - similar to Python in verbosity
-    ".php": 3.3,  # PHP - mixed HTML/code, variable prefixes
-    ".rb": 3.6,  # Ruby - descriptive method names
-    ".swift": 3.4,  # Swift - modern syntax, type inference
-    ".kt": 3.5,  # Kotlin - similar to modern languages
-    ".scala": 3.2,  # Scala - functional programming, concise
-    # Scripts and configuration
-    ".sh": 4.1,  # Shell scripts - commands and paths
-    ".bat": 4.0,  # Batch files - similar to shell
-    ".ps1": 3.8,  # PowerShell - more structured than bash
-    ".sql": 3.8,  # SQL - keywords and table/column names
+    # Programming languages - INCREASED RATIOS FOR MORE GENEROUS ESTIMATES
+    ".py": 4.0,  # Python - increased from 3.5 to 4.0
+    ".js": 3.8,  # JavaScript - increased from 3.2 to 3.8
+    ".ts": 3.9,  # TypeScript - increased from 3.3 to 3.9
+    ".jsx": 3.7,  # React JSX - increased from 3.1 to 3.7
+    ".tsx": 3.6,  # React TSX - increased from 3.0 to 3.6
+    ".java": 4.2,  # Java - increased from 3.6 to 4.2
+    ".cpp": 4.3,  # C++ - increased from 3.7 to 4.3
+    ".c": 4.4,  # C - increased from 3.8 to 4.4
+    ".go": 4.5,  # Go - increased from 3.9 to 4.5
+    ".rs": 4.0,  # Rust - increased from 3.5 to 4.0
+    ".php": 3.9,  # PHP - increased from 3.3 to 3.9
+    ".rb": 4.2,  # Ruby - increased from 3.6 to 4.2
+    ".swift": 4.0,  # Swift - increased from 3.4 to 4.0
+    ".kt": 4.0,  # Kotlin - increased from 3.5 to 4.0
+    ".scala": 3.8,  # Scala - increased from 3.2 to 3.8
+    # Scripts and configuration - INCREASED RATIOS
+    ".sh": 4.7,  # Shell scripts - increased from 4.1 to 4.7
+    ".bat": 4.6,  # Batch files - increased from 4.0 to 4.6
+    ".ps1": 4.4,  # PowerShell - increased from 3.8 to 4.4
+    ".sql": 4.4,  # SQL - increased from 3.8 to 4.4
     # Data and configuration formats
-    ".json": 2.5,  # JSON - lots of punctuation and quotes
-    ".yaml": 3.0,  # YAML - structured but readable
-    ".yml": 3.0,  # YAML (alternative extension)
-    ".xml": 2.8,  # XML - tags and attributes
-    ".toml": 3.2,  # TOML - similar to config files
-    # Documentation and text
-    ".md": 4.2,  # Markdown - natural language with formatting
-    ".txt": 4.0,  # Plain text - mostly natural language
-    ".rst": 4.1,  # reStructuredText - documentation format
+    ".json": 3.0,  # JSON - increased from 2.5 to 3.0
+    ".yaml": 3.5,  # YAML - increased from 3.0 to 3.5
+    ".yml": 3.5,  # YAML (alternative extension) - increased from 3.0 to 3.5
+    ".xml": 3.4,  # XML - increased from 2.8 to 3.4
+    ".toml": 3.8,  # TOML - increased from 3.2 to 3.8
+    # Documentation and text - INCREASED RATIOS
+    ".md": 4.8,  # Markdown - increased from 4.2 to 4.8
+    ".txt": 4.6,  # Plain text - increased from 4.0 to 4.6
+    ".rst": 4.7,  # reStructuredText - increased from 4.1 to 4.7
     # Web technologies
-    ".html": 2.9,  # HTML - tags and attributes
-    ".css": 3.4,  # CSS - properties and selectors
-    # Logs and data
-    ".log": 4.5,  # Log files - timestamps, messages, stack traces
-    ".csv": 3.1,  # CSV - data with delimiters
+    ".html": 3.5,  # HTML - increased from 2.9 to 3.5
+    ".css": 4.0,  # CSS - increased from 3.4 to 4.0
+    # Logs and data - INCREASED RATIOS
+    ".log": 5.0,  # Log files - increased from 4.5 to 5.0
+    ".csv": 3.7,  # CSV - increased from 3.1 to 3.7
     # Docker and infrastructure
-    ".dockerfile": 3.7,  # Dockerfile - commands and paths
-    ".tf": 3.5,  # Terraform - infrastructure as code
+    ".dockerfile": 4.3,  # Dockerfile - increased from 3.7 to 4.3
+    ".tf": 4.0,  # Terraform - increased from 3.5 to 4.0
 }
 
 
@@ -240,7 +240,7 @@ def get_token_estimation_ratio(file_path: str) -> float:
     from pathlib import Path
 
     extension = Path(file_path).suffix.lower()
-    return TOKEN_ESTIMATION_RATIOS.get(extension, 3.5)  # Conservative default
+    return TOKEN_ESTIMATION_RATIOS.get(extension, 4.0)  # More generous default (was 3.5)
 
 
 # MIME type mappings for image files - limited to what AI models actually support
