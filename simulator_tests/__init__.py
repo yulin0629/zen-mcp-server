@@ -14,6 +14,7 @@ from .test_content_validation import ContentValidationTest
 from .test_conversation_chain_validation import ConversationChainValidationTest
 from .test_cross_tool_comprehensive import CrossToolComprehensiveTest
 from .test_cross_tool_continuation import CrossToolContinuationTest
+from .test_debug_validation import DebugValidationTest
 from .test_line_number_validation import LineNumberValidationTest
 from .test_logs_validation import LogsValidationTest
 from .test_model_thinking_config import TestModelThinkingConfig
@@ -23,6 +24,8 @@ from .test_ollama_custom_url import OllamaCustomUrlTest
 from .test_openrouter_fallback import OpenRouterFallbackTest
 from .test_openrouter_models import OpenRouterModelsTest
 from .test_per_tool_deduplication import PerToolDeduplicationTest
+from .test_planner_continuation_history import PlannerContinuationHistoryTest
+from .test_planner_validation import PlannerValidationTest
 from .test_redis_validation import RedisValidationTest
 from .test_refactor_validation import RefactorValidationTest
 from .test_testgen_validation import TestGenValidationTest
@@ -45,9 +48,12 @@ TEST_REGISTRY = {
     "ollama_custom_url": OllamaCustomUrlTest,
     "openrouter_fallback": OpenRouterFallbackTest,
     "openrouter_models": OpenRouterModelsTest,
+    "planner_validation": PlannerValidationTest,
+    "planner_continuation_history": PlannerContinuationHistoryTest,
     "token_allocation_validation": TokenAllocationValidationTest,
     "testgen_validation": TestGenValidationTest,
     "refactor_validation": RefactorValidationTest,
+    "debug_validation": DebugValidationTest,
     "conversation_chain_validation": ConversationChainValidationTest,
     "vision_capability": VisionCapabilityTest,
     "xai_models": XAIModelsTest,
@@ -73,9 +79,12 @@ __all__ = [
     "OllamaCustomUrlTest",
     "OpenRouterFallbackTest",
     "OpenRouterModelsTest",
+    "PlannerValidationTest",
+    "PlannerContinuationHistoryTest",
     "TokenAllocationValidationTest",
     "TestGenValidationTest",
     "RefactorValidationTest",
+    "DebugValidationTest",
     "ConversationChainValidationTest",
     "VisionCapabilityTest",
     "XAIModelsTest",
